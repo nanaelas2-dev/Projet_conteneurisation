@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gestion des étudiants</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1 { margin-bottom: .2rem; }
+  #pod { color: #666; font-size: .9rem; margin-bottom: 1.5rem; }
+  form { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: .5rem; margin-bottom: 1rem; }
+  input { padding: .5rem; border: 1px solid #bbb; border-radius: 6px; }
+  button { padding: .5rem .9rem; border: 0; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; }
+  button.sec { background: #6b7280; }
+  button.del { background: #dc2626; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: .5rem; border-bottom: 1px solid #ddd; }
+  #msg { min-height: 1.4rem; margin-bottom: .5rem; }
+  .ok { color: #15803d; } .ko { color: #b91c1c; }
+</style>
+</head>
+<body>
+<h1>Gestion des étudiants</h1>
+<div id="pod"></div>
+
+<form id="form">
+  <input id="nom" placeholder="Nom" required>
+  <input id="prenom" placeholder="Prénom" required>
+  <input id="email" type="email" placeholder="Email" required>
+  <input id="age" type="number" placeholder="Âge" min="16" max="99" required>
+  <span>
+    <button id="valider" type="submit">Ajouter</button>
+    <button id="annuler" class="sec" type="button" hidden>Annuler</button>
+  </span>
+</form>
+<div id="msg"></div>
+
+<table>
+  <thead><tr><th>ID</th><th>Nom</th><th>Prénom</th><th>Email</th><th>Âge</th><th></th></tr></thead>
+  <tbody id="corps"></tbody>
+</table>
+
+<script>
+const API = '/api/etudiants';
+let enEdition = null;
+const $ = id => document.getElementById(id);
+
+function message(texte, ok = true) {
+  $('msg').textContent = texte;
+  $('msg').className = ok ? 'ok' : 'ko';
+}
+
+async function charger() {
+  const rep = await fetch(API);
+  const liste = await rep.json();
+  $('corps').innerHTML = '';
+  for (const e of liste) {
+    const tr = document.createElement('tr');
+    for (const v of [e.id, e.nom, e.prenom, e.email, e.age]) {
+      const td = document.createElement('td');
+      td.textContent = v;
+      tr.appendChild(td);
+    }
+    const actions = document.createElement('td');
+    const bm = document.createElement('button');
+    bm.textContent = 'Modifier';
+    bm.onclick = () => editer(e);
+    const bs = document.createElement('button');
+    bs.textContent = 'Supprimer';
+    bs.className = 'del';
+    bs.onclick = () => supprimer(e.id);
+    actions.append(bm, ' ', bs);
+    tr.appendChild(actions);
+    $('corps').appendChild(tr);
+  }
+}
+
+function editer(e) {
+  enEdition = e.id;
+  $('nom').value = e.nom;
+  $('prenom').value = e.prenom;
+  $('email').value = e.email;
+  $('age').value = e.age;
+  $('valider').textContent = 'Enregistrer';
+  $('annuler').hidden = false;
+}
+
+function reinitialiser() {
+  enEdition = null;
+  $('form').reset();
+  $('valider').textContent = 'Ajouter';
+  $('annuler').hidden = true;
+}
+
+async function supprimer(id) {
+  if (!confirm('Supprimer l\'étudiant ' + id + ' ?')) return;
+  const rep = await fetch(API + '/' + id, { method: 'DELETE' });
+  message(rep.ok ? 'Étudiant supprimé' : 'Échec de la suppression', rep.ok);
+  charger();
+}
+
+$('annuler').onclick = reinitialiser;
+
+$('form').onsubmit = async ev => {
+  ev.preventDefault();
+  const corps = {
+    nom: $('nom').value, prenom: $('prenom').value,
+    email: $('email').value, age: parseInt($('age').value, 10)
+  };
+  const rep = await fetch(enEdition ? API + '/' + enEdition : API, {
+    method: enEdition ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(corps)
+  });
+  if (rep.ok) {
+    message(enEdition ? 'Étudiant modifié' : 'Étudiant ajouté');
+    reinitialiser();
+    charger();
+  } else {
+    const err = await rep.json();
+    message(err.erreur || 'Erreur', false);
+  }
+};
+
+fetch('/health').then(r => r.json()).then(h => {
+  $('pod').textContent = 'Servi par : ' + h.pod + ' | Base de données : ' + h.database;
+});
+charger();
+</script>
+</body>
+</html>
